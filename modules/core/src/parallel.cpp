@@ -578,7 +578,11 @@ static void parallel_for_impl(const cv::Range& range, const cv::ParallelLoopBody
 
 #elif defined HAVE_OPENMP
 
-        #pragma omp parallel for schedule(dynamic) num_threads(numThreads > 0 ? numThreads : numThreadsMax)
+        // schedule(static) is used instead of schedule(dynamic) so the loop runs correctly
+        // under Wine, whose vcomp _vcomp_for_dynamic_init is a stub that drops iteration ranges
+        // for chunked-dynamic flag values. Negligible perf impact for uniform-cost iterations
+        // (typical of OpenCV's parallel_for_).
+        #pragma omp parallel for schedule(static) num_threads(numThreads > 0 ? numThreads : numThreadsMax)
         for (int i = stripeRange.start; i < stripeRange.end; ++i)
             pbody(Range(i, i + 1));
 

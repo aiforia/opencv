@@ -433,7 +433,12 @@ bool  JpegDecoder::readData( Mat& img )
             {
                 if( cinfo->num_components != 4 )
                 {
+#ifdef JCS_EXTENSIONS
+                    // libjpeg-turbo can write BGR itself, sparing a copy and a channel swap per row
+                    cinfo->out_color_space = JCS_EXT_BGR;
+#else
                     cinfo->out_color_space = JCS_RGB;
+#endif
                     cinfo->out_color_components = 3;
                 }
                 else
@@ -487,6 +492,13 @@ bool  JpegDecoder::readData( Mat& img )
             uchar* data = img.ptr();
             for( ; m_height--; data += step )
             {
+#ifdef JCS_EXTENSIONS
+                if( cinfo->out_color_space == JCS_EXT_BGR )
+                {
+                    jpeg_read_scanlines( cinfo, &data, 1 );
+                    continue;
+                }
+#endif
                 jpeg_read_scanlines( cinfo, buffer, 1 );
                 if( color )
                 {
@@ -631,6 +643,11 @@ bool JpegEncoder::write( const Mat& img, const std::vector<int>& params )
         int channels = _channels > 1 ? 3 : 1;
         cinfo.input_components = channels;
         cinfo.in_color_space = channels > 1 ? JCS_RGB : JCS_GRAYSCALE;
+#ifdef JCS_EXTENSIONS
+        // libjpeg-turbo can read BGR itself, sparing a channel swap per row
+        if( _channels == 3 )
+            cinfo.in_color_space = JCS_EXT_BGR;
+#endif
 
         int quality = 95;
         int progressive = 0;
@@ -754,7 +771,7 @@ bool JpegEncoder::write( const Mat& img, const std::vector<int>& params )
         {
             uchar *data = img.data + img.step*y, *ptr = data;
 
-            if( _channels == 3 )
+            if( _channels == 3 && cinfo.in_color_space == JCS_RGB )
             {
                 icvCvt_BGR2RGB_8u_C3R( data, 0, buffer, 0, Size(width,1) );
                 ptr = buffer;
